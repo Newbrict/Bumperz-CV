@@ -16,8 +16,9 @@ def preProcess(img):
     denoise = cv2.bilateralFilter(gray, -1, sigColor, sigSpace)
 
     # binarization
-    _, binarization = cv2.threshold(denoise,  170, 255, cv2.THRESH_BINARY)# | cv2.THRESH_OTSU)
-    binarization[0:140] = 0
+    _, binarization = cv2.threshold(denoise, 170, 255, cv2.THRESH_BINARY)# | cv2.THRESH_OTSU)
+    #binarization[0:140] = 0
+    binarization[0:220] = 0
     #binarization[0:200] = 0
 
 
@@ -82,6 +83,8 @@ def selectFeatures(img):
 
 def getAverage(features):
     size = len(features)
+    if size == 0:
+        return (0,0)
     avgX = np.average([p.pt[0] for p in features]).astype(int)
     avgY = np.average([p.pt[1] for p in features]).astype(int)
     return (avgX, avgY)
@@ -92,7 +95,8 @@ def compare(im1, im2 ,axis):
 def main():
     #cap = cv2.VideoCapture('vid/road.mp4')
     #cap = cv2.VideoCapture('vid/vtest.mov')
-    cap = cv2.VideoCapture('vid/last.mov')
+    #cap = cv2.VideoCapture('vid/last.mov')
+    cap = cv2.VideoCapture('vid/demov1.mov')
     binaries = []
     rrIndex = 0
     rrMax = 20
@@ -106,9 +110,19 @@ def main():
     rrVelIndex = 0
     rrVelMax = 10
     averagePt = None
+    frameSkip = 300
+    frameCount = 0
+
+    drifts = []
+    rrDriftIndex = 0
+    rrDriftMax = 10
+    maxDrift = 0
 
     while(cap.isOpened()):
         ret, frame = cap.read()
+        if not ret:
+             break;
+        frameCount += 1
 
         gray, denoise, binarization = preProcess(frame)
 
@@ -127,7 +141,10 @@ def main():
             else:
                 ored = ored | np.array(x)
 
-        features = selectFeatures(ored)
+        if frameCount > frameSkip:
+            features = selectFeatures(ored)
+        else:
+            features = []
         img_features = cv2.drawKeypoints(frame.copy(),features,None,(255,0,0),4)
 
         if averagePt is None:
@@ -160,9 +177,8 @@ def main():
             vels.append(velocity)
         else:
             vels[rrVelIndex] = velocity
-        smoothVelocity = tuple(np.average(np.array(vels).reshape(2,len(vels)), axis=1).astype(int))
+        smoothVelocity = tuple((np.average(np.array(vels).reshape(2,len(vels)), axis=1)*5).astype(int))
         #smoothVelocity = (smoothVelocity[0]**2, smoothVelocity[1]**2)
-        smoothVelocity = (smoothVelocity[0]*5, smoothVelocity[1]*5)
 
         #if len(avgs) > 1:
         #    oldSmooth = smoothAverage
@@ -173,13 +189,32 @@ def main():
         #img_average = cv2.circle(frame.copy(), smoothAverage, 3, (255,0,255), 2)
         centerOfScreen = np.array((len(frame[0])/2, len(frame)/2)).astype(int)
         adjAvg = (centerOfScreen + smoothVelocity).astype(int)
-        mag = np.sqrt(adjAvg[0]**2 + adjAvg[1]**2)
-        img_velocity = cv2.arrowedLine(frame.copy(), tuple(centerOfScreen), (adjAvg[0], centerOfScreen[1]), (0,255,0), 2)
+        img_velocity = cv2.arrowedLine(ored.copy(), tuple(centerOfScreen), (adjAvg[0], centerOfScreen[1]), (0,255,0), 2)
         img_velocity = cv2.arrowedLine(img_velocity, tuple(centerOfScreen), (centerOfScreen[0], adjAvg[1]), (0,0,255), 2)
+
+
+
+        xsize = abs(smoothVelocity[0])
+
+        rrDriftIndex += 1
+        rrDriftIndex = rrDriftIndex%rrDriftMax
+        if len(drifts) < rrDriftMax:
+            drifts.append(xsize)
+        else:
+            drifts[rrDriftIndex] = xsize
+
+
+        text = "Drifting: {}".format(max(drifts))
+
+        if max(drifts) >= 20:
+            img_velocity = cv2.putText(img_velocity, text, (50,50),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255),5)
+        else:
+            img_velocity = cv2.putText(img_velocity, text, (50,50),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0),1)
 
         #show_top = compare(frame, binarization, 1)
         show_top = compare(frame, ored, 1)
         show_bot = compare(img_features, img_velocity, 1)
+        #show_bot = compare(img_features, img_features, 1)
         #show_bot = compare(img_features,distort, 1)
         show_this = compare(show_top, show_bot, 0)
         cv2.imshow('frame', show_this)
