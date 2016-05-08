@@ -97,6 +97,14 @@ def main():
     #cap = cv2.VideoCapture('vid/vtest.mov')
     #cap = cv2.VideoCapture('vid/last.mov')
     cap = cv2.VideoCapture('vid/demov1.mov')
+
+
+
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('output_1x.avi',fourcc, 30.0, (640,360))
+    #out = cv2.VideoWriter('output_4x.avi',fourcc, 30.0, (640*2,360*2))
+
     binaries = []
     rrIndex = 0
     rrMax = 20
@@ -190,7 +198,7 @@ def main():
         centerOfScreen = np.array((len(frame[0])/2, len(frame)/2)).astype(int)
         adjAvg = (centerOfScreen + smoothVelocity).astype(int)
         img_velocity = cv2.arrowedLine(ored.copy(), tuple(centerOfScreen), (adjAvg[0], centerOfScreen[1]), (0,255,0), 2)
-        img_velocity = cv2.arrowedLine(img_velocity, tuple(centerOfScreen), (centerOfScreen[0], adjAvg[1]), (0,0,255), 2)
+        #img_velocity = cv2.arrowedLine(img_velocity, tuple(centerOfScreen), (centerOfScreen[0], adjAvg[1]), (0,0,255), 2)
 
 
 
@@ -212,11 +220,26 @@ def main():
             img_velocity = cv2.putText(img_velocity, text, (50,50),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0),1)
 
         #show_top = compare(frame, binarization, 1)
-        show_top = compare(frame, ored, 1)
+        show_top = compare(frame, gray, 1)
         show_bot = compare(img_features, img_velocity, 1)
         #show_bot = compare(img_features, img_features, 1)
         #show_bot = compare(img_features,distort, 1)
         show_this = compare(show_top, show_bot, 0)
+
+
+        show_this = img_features.copy()
+        if max(drifts) >= 20:
+            text = "DRIFTING!"
+            show_this = cv2.putText(show_this, text, (50,50),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255),5)
+        else:
+            text = "No Drifting"
+            show_this = cv2.putText(show_this, text, (50,50),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0),1)
+        frame_write = show_this
+        #frame_write = cv2.flip(show_this,1)
+
+        # write the flipped frame
+        out.write(frame_write)
+
         cv2.imshow('frame', show_this)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
